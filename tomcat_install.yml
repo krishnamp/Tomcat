@@ -1,0 +1,65 @@
+
+
+- name: Setup Application Server. 
+  hosts: appnodes
+  become: yes
+  tags:
+    - APP
+  vars: 
+    URL: https://www-eu.apache.org/dist/tomcat/tomcat-9/v9.0.21/src/apache-tomcat-9.0.21-src.tar.gz
+    
+  gather_facts: true
+  tasks:
+    - name: Install Java
+      package:
+        name: java
+        state: installed 
+
+    - name: Run filters
+      shell: echo {{URL}} | awk -F / '{print $NF}' | sed -e 's/.tar.gz//'
+      register: out
+
+    - name: Define TAR Variable 
+      set_fact:
+        TOMCAT_DIR: "{{out.stdout}}"
+
+    - name: Check if tomcat already exists..
+      shell: ls -ld "/opt/{{TOMCAT_DIR}}"
+      register: out 
+      ignore_errors: True 
+
+    - name: Download Tomcat
+      unarchive:
+        src: "{{URL}}"
+        dest: /opt
+        remote_src: yes
+      when: out.rc != 0    
+
+   
+    - name: Check tomcat running or not.
+      shell: ps -ef | grep java | grep {{TOMCAT_DIR}} | grep -v grep 
+      register: out
+      ignore_errors: yes
+
+    - name: Stop tomcat if running
+      when: out.rc == 0
+      shell: nohup /opt/{{TOMCAT_DIR}}/bin/shutdown.sh
+
+    - name: Start Tomcat 
+      shell: nohup /opt/{{TOMCAT_DIR}}/bin/startup.sh 
+
+
+
+    
+
+    - name: Create tomcat workers file 
+      blockinfile:
+        path: /etc/httpd/conf.d/worker.properties 
+        create: yes
+        block: | 
+          worker.list=local
+          worker.local.host=localhost
+          worker.local.port=8009      
+    
+    
+    
